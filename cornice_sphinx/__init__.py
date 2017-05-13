@@ -13,13 +13,14 @@ try:
 except ImportError:
     pass
 
-from cornice.util import to_list, is_string, PY3
+from cornice.util import to_list, is_string
 from cornice.service import get_services, clear_services
 
 import docutils
 from docutils import nodes, core
 from docutils.parsers.rst import Directive, directives
 from docutils.writers.html4css1 import Writer, HTMLTranslator
+from six import PY3
 from sphinx.util.docfields import DocFieldTransformer
 
 MODULES = {}
@@ -29,11 +30,14 @@ def convert_to_list(argument):
     """Convert a comma separated list into a list of python values"""
     if argument is None:
         return []
-    else:
-        return [i.strip() for i in argument.split(',')]
+    return [i.strip() for i in argument.split(',')]
 
 
 def convert_to_list_required(argument):
+    """Convert a comma separated list into a list of python values
+
+    :raises: ValueError
+    """
     if argument is None:
         raise ValueError('argument required but none supplied')
     return convert_to_list(argument)
@@ -105,10 +109,8 @@ class ServiceDirective(Directive):
                 ob = args['klass']
                 obj_ = getattr(ob, obj.lower())
                 return format_docstring(obj_)
-            else:
-                return ''
-        else:
-            return format_docstring(obj)
+            return ''
+        return format_docstring(obj)
 
     def _render_service(self, service):
         service_id = "service-%d" % self.env.new_serialno('service')
@@ -117,7 +119,7 @@ class ServiceDirective(Directive):
         title = '%s service at %s' % (service.name.title(), service.path)
         service_node += nodes.title(text=title)
 
-        if service.description is not None:
+        if service.description:
             service_node += rst2node(trim(service.description))
 
         for method, view, args in service.definitions:
@@ -134,43 +136,47 @@ class ServiceDirective(Directive):
                 schema = args['schema']
 
                 attrs_node = nodes.inline()
-                for location in ('header', 'querystring', 'body'):
-                    attributes = schema.get_attributes(location=location)
-                    if attributes:
-                        attrs_node += nodes.inline(
-                            text='values in the %s' % location)
-                        location_attrs = nodes.bullet_list()
+                for param_schema in schema.children:
+                    if param_schema.name in ('header', 'querystring', 'body'):
+                        attributes = param_schema.children
+                        if attributes:
+                            attrs_node += nodes.inline(
+                                text='values in the %s' % param_schema.name)
+                            location_attrs = nodes.bullet_list()
 
-                        for attr in attributes:
-                            temp = nodes.list_item()
+                            for attr in attributes:
+                                temp = nodes.list_item()
 
-                            # Get attribute data-type
-                            if hasattr(attr, 'type'):
-                                attr_type = attr.type
-                            elif hasattr(attr, 'typ'):
-                                attr_type = attr.typ.__class__.__name__
-                            else:
-                                attr_type = None
+                                # Get attribute data-type
+                                if hasattr(attr, 'type'):
+                                    attr_type = attr.type
+                                elif hasattr(attr, 'typ'):
+                                    attr_type = attr.typ.__class__.__name__
+                                else:
+                                    attr_type = None
 
-                            temp += nodes.strong(text=attr.name)
-                            if attr_type is not None:
-                                temp += nodes.inline(text=' (%s)' % attr_type)
-                            if not attr.required or attr.description:
-                                temp += nodes.inline(text=' - ')
-                                if not attr.required:
-                                    if attr.missing is not None:
-                                        default = json.dumps(attr.missing)
-                                        temp += nodes.inline(
-                                            text='(default: %s) ' % default)
-                                    else:
-                                        temp += nodes.inline(
-                                            text='(optional) ')
-                                if attr.description:
-                                    temp += nodes.inline(text=attr.description)
+                                temp += nodes.strong(text=attr.name)
+                                if attr_type is not None:
+                                    temp += nodes.inline(text=' (%s)' % attr_type)
+                                if not attr.required or attr.description:
+                                    temp += nodes.inline(text=' - ')
+                                    if not attr.required:
+                                        if attr.missing is not None:
+                                            try:
+                                                default = json.dumps(attr.missing)
+                                            except TypeError:
+                                                default = 'dropped'
+                                            temp += nodes.inline(
+                                                text='(default: %s) ' % default)
+                                        else:
+                                            temp += nodes.inline(
+                                                text='(optional) ')
+                                    if attr.description:
+                                        temp += nodes.inline(text=attr.description)
 
-                            location_attrs += temp
+                                location_attrs += temp
 
-                        attrs_node += location_attrs
+                            attrs_node += location_attrs
                 method_node += attrs_node
 
             for validator in args.get('validators', ()):
@@ -249,7 +255,7 @@ def trim(docstring):
         trimmed.pop(0)
     # Return a single string:
     res = '\n'.join(trimmed)
-    if not PY3 and not isinstance(res, unicode):
+    if not PY3 and not isinstance(res, unicode):  # noqa
         res = res.decode('utf8')
     return res
 
@@ -275,21 +281,25 @@ class _FragmentWriter(Writer):
 
 
 def rst2html(data):
-    """Converts a reStructuredText into its HTML
-    """
+    """Converts a reStructuredText into its HTML"""
     if not data:
         return ''
     return core.publish_string(data, writer=_FragmentWriter())
 
 
+class Config(object):
+    add_function_parentheses = True
+
+
 class Env(object):
     temp_data = {}
     docname = ''
+    ref_context = {}
+    config = Config()
 
 
 def rst2node(data):
-    """Converts a reStructuredText into its node
-    """
+    """Converts a reStructuredText into its node"""
     if not data:
         return
     parser = docutils.parsers.rst.Parser()
@@ -298,15 +308,15 @@ def rst2node(data):
     document.settings.tab_width = 4
     document.settings.pep_references = False
     document.settings.rfc_references = False
+    document.settings.character_level_inline_markup = False
     document.settings.env = Env()
     parser.parse(data, document)
     if len(document.children) == 1:
         return document.children[0]
-    else:
-        par = docutils.nodes.paragraph()
-        for child in document.children:
-            par += child
-        return par
+    par = docutils.nodes.paragraph()
+    for child in document.children:
+        par += child
+    return par
 
 
 def setup(app):

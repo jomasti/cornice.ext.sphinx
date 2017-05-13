@@ -9,10 +9,21 @@ with open(os.path.join(here, 'README.rst')) as f:
     README = f.read()
 
 
-requires = [
-    'cornice',
+REQUIREMENTS = [
+    'cornice>2.0.0',
     'Sphinx',
-    'docutils'
+    'docutils',
+    'six',
+]
+
+REQUIREMENTS_DEV = [
+    'colander',
+    'coverage',
+    'flake8',
+    'mock',
+    'pyramid',
+    'tox',
+    'webtest'
 ]
 
 setup(name='cornice_sphinx',
@@ -31,5 +42,6 @@ setup(name='cornice_sphinx',
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    install_requires=requires,
+    install_requires=REQUIREMENTS,
+    tests_require=REQUIREMENTS_DEV,
 )

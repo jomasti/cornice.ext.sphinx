@@ -1,8 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http://mozilla.org/MPL/2.0/.
-import mock
 from unittest import TestCase
+import mock
 
 from cornice_sphinx import rst2html, ServiceDirective
 
@@ -25,8 +25,8 @@ class TestServiceDirective(TestCase):
 
         self.directive = ServiceDirective(
             'test', [], {}, [], 1, 1, 'test', param, 1)
-        self.directive.options['app'] = 'cornice.tests.ext.dummy'
-        self.directive.options['services'] = ['users', "thing_service"]
+        self.directive.options['app'] = 'tests.test_app'
+        self.directive.options['services'] = ['Shoe']
 
     def test_module_reload(self):
         self.directive.options['app'] = None
@@ -37,9 +37,8 @@ class TestServiceDirective(TestCase):
 
     def test_dummy(self):
         ret = self.directive.run()
-        self.assertEqual(len(ret), 2)
-        self.assertIn('Users service at', str(ret[0]))
-        self.assertIn('Thing_Service service at ', str(ret[1]))
+        self.assertEqual(len(ret), 1)
+        self.assertIn('Shoe service at', str(ret[0]))
 
     def test_string_validator_resolved(self):
         # A validator defined as a string should be parsed as an obj,
